@@ -88,35 +88,167 @@
     
 
     <h2>Project Overview</h2>
-    <p> This project involves a HiWonder arm interacting with a dynamic environment using computer 
-      vision, trajectory planning, and inverse kinematics to enable an opponent in engage in 
-      pingpong gameplay. </p>
+    <p> This project involves the HiWonder ArmPi Pro interacting with a dynamic environment, in the
+      form of moving objects of interest, using computer vision, trajectory planning, and inverse
+      kinematics to enable a player to engage in various gameplay. </p>
 
-    <h2> MVP & Stretch Goals </h2>
-        <p> Our MVP is to have a fixed robot arm block a ping pong ball rolling towards it. The 
-          arm should be able to track and predict the ball’s trajectory, plan out the kinematics 
-          for where to go to contact the ball, and successfully make it there in time. This will 
-          work across varying ball speeds. This lends itself to varying improvements: introducing 
-          a “swing” to return the ball instead of just blocking it, or potentially catching the 
-          ball as an advancement in complexity without completely changing the function. 
-        Our stretch goal will involve a fixed robot arm hitting a ping pong in mid air with a given 
-        type of swing that aims the ball towards one direction (left, middle, or right side) of 
-        the table. Each swing should be successfully completed at a rate of over 50% accuracy.
-        </p>
+    <h2> MVP &amp; Stretch Goals </h2>
+        <p> <strong>MVP:</strong> Our original MVP was to have a fixed robot arm block a ping pong
+          ball rolling towards it. The arm should be able to track and predict the ball’s trajectory,
+          plan out the kinematics for where to go to contact the ball, and successfully make it there
+          in time across varying ball speeds. </p>
+        <p> <strong>Stretch Goals:</strong> The introduction of timing-based elements serve as a way
+          to go beyond our original MVP. This can be done in two main ways if we remain on the rolling
+          surface: we can either “return” the ball, meaning to hit the ball in a manner such that it
+          gains a velocity to send it backwards on the table, or “catch” the ball, meaning to open the
+          end effector, or gripper, and close it when the ball within grasp. These two challenges are
+          ordered based on perceived difficulty through the required timing accuracy, as a return has
+          a greater window of interaction than a catch with the HiWonder’s grippers. Beyond this, we
+          will hopefully move beyond the planar problem of a rolling ball and move into three
+          dimensions by being able to make contact with a ball that is mid-air. To this extent, the
+          previous MVP-stretch goal distinction exists, as first making contact with a mid-air ball
+          comes before returning and or catching. </p>
+        <p> <strong>Why These Changes:</strong> For our MVP, we have a well-working prototype (though
+          we are missing tuning and any verifiable metrics). Given this, we think the MVP is feasible
+          to be reasonably achieved within the next week of working on the project, allowing us more
+          time to reach our stretch goals. The stretch goals themselves seem reasonable, although
+          certain elements may not be a direct extension of previous work, i.e. planning for 3-D
+          geometries, while it is a simple extension mathematically, requires a newly developed
+          testing setup and lends itself to greater perceived work. </p>
 
-    <h2> Status </h2>
-        <p> text </p>
-        <video class="rotate-90" controls>
-            <source src="media/status_m1.mov" type="video/mp4">
+    <h2> Status &amp; Major Components </h2>
+        <p> Overall, we have verified that the pipeline can work in full on all of the required
+          hardware. We got an overhead camera (placed flat on top of a table) to stream footage over
+          Wi-Fi via DroidCam, process this via a Python script to detect and locate the ball, then
+          predict the intersection between this ball and a “block line” in front of the robot, and
+          send the end effector to that position over UDP. Currently, the inverse kinematics are still
+          on the RasPi, with everything here being in pure Python without the ROS framework yet. A
+          diagram showcasing this pipeline is shown below: </p>
+        <img src="media/pipeline_m1.png" alt="Pipeline diagram">
+
+        <h3> Vision </h3>
+        <p> Unfortunately, we were having difficulty streaming frames from the RealSense cameras and
+          capturing any frame for processing via USB connection. To counteract this, we simply used an
+          IPhone 15 as our camera, where DroidCam allowed us to connect and stream the footage
+          wirelessly to feed into our vision pipeline (this was deemed faster than debugging the
+          initial stump that the RealSense gave us given a member’s prior experience using this method
+          for an external camera, though this added about 150ms of delay, measured via pointing the
+          phone at a timer on the laptop’s screen). To ensure stability, we simply placed the phone
+          flat across a wooden block hanging over a table for maximal vision, with the robot on the
+          floor. </p>
+        <p> For the actual computer vision processing for our project, we tackled two main issues:
+          firstly, isolate and extract the ball’s position, and then using this pixel position,
+          translate this into the robot’s frame. For the isolation and extraction, we got the ball’s
+          center via HSV thresholding, and then a few morphological operations, such as erosion and
+          dilation, as a form of image processing to remove noise and smooth out our image. Then, with
+          a masked image that represents the balls as a “blob”, we find the largest based on size and
+          average the x and y values of this blob to find the center. One issue with this testing is
+          that the robot’s hue was deemed as within this threshold when the light shined on it at a
+          particular angle, making certain interactions quite jittery. </p>
+        <p> For the transforms, we found the homography, using four printed AprilTag markers that were
+          defined 60mm in size. Using OpenCV’s built-in homography finding function, we could now map
+          any pixel to meters on the table’s (or in this testing case, floor’s) plane. We then needed
+          to convert the table coordinates into the robot’s frame. We recorded, by hand, the distances
+          between the top left corners of all the tags relative to one another. Defining the bottom
+          left tag and the bottom left corner of this tag as our world origin, we measured the robot’s
+          center, or the middle of the rotating plate, distance to the origin. This allows us to
+          describe the points that are in the table relative to the robot, and since this is a planar
+          problem, we use one fixed height that is guaranteed to make contact with a rolling ball
+          without potentially driving into the floor. The mask of the ball over a frame can be seen
+          below: </p>
+        <img src="media/ball_mask.png" alt="HSV mask of the ball in one camera frame">
+
+        <h3> Trajectory Generation </h3>
+        <p> We applied a theoretical physics model to our ball’s rolling path. Given that the ball
+          rolls smoothly across the table, the only forces acting upon the ball would be gravity, the
+          normal force, and friction. The only force here that impacts the ball is friction, and with
+          this assumption, our ball would experience a constant deceleration proportional to friction.
+          We independently solve this across each axis given that our ball moves in the x-y plane. We
+          define the equation of the ball as <code>p(t) = p<sub>0</sub> + v·t + ½·a·t<sup>2</sup></code>.
+          We fit the ball’s positions to this equation via least squares across the last 0.6s of
+          detections, which gives us a recent update of the fitted trajectory. The velocity and
+          acceleration are simply found via the fit, where we are consistently determining a dt value
+          between this point and the last point, where p(dt) = our function. This fit also assumed an
+          acceleration of 0 unless there are more than 15 points, since the acceleration was very
+          noisy. When the ball is lost, it resets. </p>
+        <p> To then predict the interception, we define a “block line”, which is just a line that sits
+          in front of the robot. Given we have an equation for the ball’s x and y, we can hardcode the
+          blockline to sit at a particular x value (to be in front of the robot) and solve for the
+          y-coordinate of the intersection between block line and ball’s trajectory. We validated this
+          visually and through the functionality of our MVP. </p>
+
+        <h3> Kinematics </h3>
+        <p> The kinematics for our project were an extension from previous work that has been done in
+          the Fundamentals of Robotics course at Olin, developed by both Enzo and Vanessa (previous
+          students). This work can be observed here:
+          <a href="https://github.com/enzolaj/funrobo-miniprojects">https://github.com/enzolaj/funrobo-miniprojects</a>.
+          This work was later adapted to integrate more than just the Raspberry Pi, which operates the
+          HiWonder robot. Taken together, all of the inverse kinematics (numerical) could simply be
+          extracted away. To this extent, we simply set up communication between the host laptop and
+          the listener Raspberry Pi, which would listen for a 3-D coordinate (which we get from our
+          intersection finder, with a fixed x and z as the IK solver needs three inputs) to input into
+          the inverse kinematics solver. </p>
+        <p> We found that the UDP communication takes around 2ms, the IK takes around 15ms, and moving
+          the end effector has a maximal speed of around 0.8m/s, though we experimented with 0.6m/s to
+          be on the safer end. Taken together, this means that it would take around 0.17 seconds from
+          the command to reach the point. We recorded the arm moving between two points multiple times
+          in order to see if any of the speeds reached a limit, where we noticed that after 0.6m/s, the
+          jitter from moving so fast was intense. One example video is shown below: </p>
+        <video controls playsinline preload="metadata">
+            <source src="media/point_testing.webm" type="video/webm">
+            <source src="media/point_testing.mp4" type="video/mp4">
         </video>
 
-    <h2> Potential Risks</h2>
-        <p> text </p>
+        <p> Together, these result in this video: </p>
+        <video controls playsinline preload="metadata">
+            <source src="media/status_m1.webm" type="video/webm">
+            <source src="media/status_m1.mp4" type="video/mp4">
+        </video>
+        <p> From the video, we can see that the robot is able to block certain rolls; however, some rolls 
+          are detected too slowly, and the arm is unable to travel there in time, likely due to poor isolation
+          of the ball from the HSV threshold. Additionally, towards the end, the ball ended up spinning away 
+          from the expected path. This was unaccounted for in earlier testing, perhaps due to material differences
+          between the floor and the wooden tables, where our spin did not impact the ball's trajectory to this
+          extent. Consequently, there is no way for the robot to accurately predict the ball's intersection point when
+          there is intense spin presnt as our physics model does not account for it.
+        </p>
+
+
+    <h2> Potential Risks </h2>
+        <p> Fundamentally, our current CV approach is prone to misalignment across testing environments
+          as it is purely tuned by hand. The HSV approach is also likely to falter under the same
+          testing environment as moving shadows and various small lighting modifications could greatly
+          impact the detection, which would make further testing inconsistent unless we are more
+          intentional with our actions. Currently, we also don’t have a solid plan for how we could
+          tackle erratic jumps in our predicted intersection, as we try to remove outliers from the
+          fit, but have no logic for what comes after the fit. This could emerge as a noisy prediction
+          that mitigates other attempts to refine accuracy and go unnoticed. We also aren’t sure if
+          certain things are possible with our given speeds, such as catching the ball in our later
+          stretch goal. Also, if we still cannot get the Realsense to work, the WiFi jitter could lead
+          to delays, as there were from time to time some occasional lagspikes. </p>
+        <p> The largest risk for the later advances in our project are establishing a consistent and
+          robust testing environment such that certain variables, such as robot transforms, are
+          consistent across each use. We also may need new hardware, which could lead to a bottleneck
+          in our ability to get started (if we deem that we need a depth-camera, or our current cameras
+          are insufficient for the mid-air attempts). </p>
 
     <h2> Goals for Milestone 2 </h2>
-        <p> For our second sprint, we will continue testing our arm to nensure that position 
-          checks are in place to reduce instances of the robot breaking its trajectory fit. We will
-          also begin working on mid-air extraction. </p>
+        <p> One big goal for the next milestone is to retune our HSV values for better accuracy. We only
+          now realized that a lot of the detection may have been off since the livestream itself and
+          previous IPhone footage were not of the same exposure value, perhaps due to some artifacts
+          between file extension conversion. We also plan to make the arm more responsive, currently,
+          it exhibits blocking behavior that sleeps between each target destination, which means a
+          modification to the ball is not reacted to. Flatly, we also need to port all of this work to
+          exist within the ROS framework we established earlier. Finally, we will also begin work on
+          adapting the newer algorithms, such as returning and catching the ball. This will require us
+          to be more intentional with timing. In parallel, we will develop a more robust testing setup,
+          and perhaps use two cameras or a stereo camera to make the depth extraction easier for the
+          switch to mid-air tracking. </p>
+  </div>
+
+  <div id="milestone-2" class="tab-content">
+    <p> Coming soon. </p>
+  </div>
 
 
   <!-- Tab Switching Script -->
