@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ping Pong Player - Project Updates</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.6;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 0 20px;
+      color: #222;
+      background-color: #e7f9ff;
+    }
+
+    /* Tab bar styling */
+    .tab-bar {
+      display: flex;
+      gap: 8px;
+      border-bottom: 2px solid #051057;
+      margin-bottom: 24px;
+    }
+    .tab-btn {
+      background: none;
+      border: none;
+      padding: 10px 16px;
+      font-size: 16px;
+      cursor: pointer;
+      color: #0b5394;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+    }
+    .tab-btn:hover {
+      color: #351c75;
+    }
+    .tab-btn.active {
+      color: #073763;
+      font-weight: 600;
+      border-bottom-color: #2e260e;
+    }
+
+    /* Hide inactive tab sections */
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
+
+    .rotate-90 {
+      transform: rotate(90deg);
+      transform-origin: center center;
+    }
+
+    video {
+      max-width: 100%;
+      height: auto;
+      border-radius: 6px;
+      margin: 16px auto;
+      display: block;
+    }
+
+    img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 6px;
+      margin: 16px 0;
+      display: block;
+    }
+    li { margin-bottom: 8px; }   
+    ul ul { margin-top: 8px; }
+  </style>
+</head>
+<body>
+
+  <h1>Ping Pong Player</h1>
+
+  <!-- Tab Buttons -->
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="openTab(event, 'milestone-1')">Milestone 1</button>
+    <button class="tab-btn" onclick="openTab(event, 'milestone-2')">Milestone 2</button>
+  </div>
+
+  <!-- Tab Sections -->
+  <div id="milestone-1" class="tab-content active">
+    
+
+    <h2>Project Overview</h2>
+    <p><em> text </em></p>
+
+    <h2> MVP & Stretch Goals </h2>
+        <p> Our MVP is to have a fixed robot arm block a ping pong ball rolling towards it. The arm should be able to track and predict the ball’s trajectory, plan out the kinematics for where to go to contact the ball, and successfully make it there in time. This will work across varying ball speeds. This lends itself to varying improvements: introducing a “swing” to return the ball instead of just blocking it, or potentially catching the ball as an advancement in complexity without completely changing the function. 
+        Our stretch goal will involve a fixed robot arm hitting a ping pong in mid air with a given type of swing that aims the ball towards one direction (left, middle, or right side) of the table. Each swing should be successfully completed at a rate of over 50% accuracy.
+        </p>
+
+    <h2> Status </h2>
+        <p><em>text </em></p>
+        <video class="rotate-90" controls>
+            <source src="media/status_m1.mov" type="video/mp4">
+        </video>
+
+    <h2> Potential Risks</h2>
+        <p><em>text </em></p>
+
+    <h2> Goals for Milestone 2 </h2>
+        <p><em>text </em></p>
+
+
+  <!-- Tab Switching Script -->
+  <script>
+    function openTab(event, tabId) {
+      // Hide all tab content sections
+      document.querySelectorAll('.tab-content').forEach(section => {
+        section.classList.remove('active');
+      });
+
+      // Remove active highlight from all tab buttons
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+      });
+
+      // Show the clicked tab and highlight its button
+      document.getElementById(tabId).classList.add('active');
+      event.currentTarget.classList.add('active');
+    }
+  </script>
+
+</body>
+</html>
